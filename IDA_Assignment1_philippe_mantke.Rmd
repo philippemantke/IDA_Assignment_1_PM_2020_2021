@@ -1,0 +1,445 @@
+---
+title: "IDA_Assignment1"
+author: "philippe mantke"
+date: "08/10/2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+# Assignment 1 - Philippe Mantke s2123414
+
+
+##Question 1
+
+**1a**: Note that under MCAR missingnes and both observed and missing data are independent. Hence the conditional probability of missingnes given gender is just the probability of missingnes. ANSWER: (ii) 0.3
+
+**1b**: Under MAR, missing values depend on observed data but not on the missing data itself. ANSWER: (ii) The probability of ALQ being missing is independent of the Yes/No value of ALQ after adjusting for gender.
+
+**1c** P(Missing = TRUE | F) = P(missing n F)/P(F) has nothing to do with the male gender. ANSWER: (iii) It is impossible to conclude from the information given.
+
+
+## Question 2 
+Suppose that a dataset consists of 100 subjects and 10 variables. Each variable contains 10% of missing values. What is the largest possible subsample under a co
+mplete case analysis? What is the smallest? Justify. 
+
+Now it is not impossible that 10% if missing values occur in the same subjects for all variables. Thus we could have 90 subjects with complete cases available for complete case analysis
+
+On the other hand it is equally, not impossible, that 10% missing values occur for different subjects. I.e. a subject will only have a missing value for one of the variable. there are 10 variables. And for each variable we have 100 observations. so for each variable 10 observations are missing. If exactly one observation is missing per subject then in total we will have 0 subjects with complete cases available for complete case analysis. 
+
+## Question 3 
+
+### 3(a)
+Note that the condition for missingness is dependent on both Y1 and Z3, i.e. the missing values and z3 (parameter for overall probability of missingness), and hence by definition, this mechanism is MAR.
+```{r, include = FALSE}
+require(MASS)
+```
+
+```{r q3a, include=FALSE, fig.align = 'center'}
+#recall that the seed changes every time you use the quasi randomness
+
+n = 500
+mu1 = 1
+mu2 = 5
+
+sigma1 = 1
+#var2 = var(5 + 2 * Z1 + Z2) = 4var(z1) + var(z2) + 2cov(z1,z2)
+sigma2 = sqrt(5)
+
+#remark the following covariance properties: 
+# Cov(aX + b, cY + d) = acCov(X, Y ) 
+# Cov(X1 + X2, Y ) = Cov(X1, Y ) + Cov(X2, Y )
+# Cov(X, X) = Var(X)
+# then cov(y1, y2) = cov(1 + z1, 5 + 2z1, z2) = cov(z1,2z1) + cov(z1,z2)
+# = cov(z1, 2z1) = 2 *var(z1) = 2
+
+rho = 2/sqrt(5)
+
+#covariance matrix
+Sigma <- matrix(c(sigma1^2, rho*sigma1*sigma2, rho*sigma1*sigma2, sigma2^2), 2, 2, byrow = T)
+
+set.seed(1)
+Y <- mvrnorm(n, mu = c(mu1, mu2), Sigma = Sigma)
+Y1 <- Y[,1]; Y2 <- Y[,2]
+mean(Y1); mean(Y2); sd(Y1); sd(Y2)
+
+set.seed(1)
+z3 = rnorm(n, 0, 1)
+# why would mvrnorm render different results
+
+# y2missing hold TRUE value when the function is less than 0. We can use it to creat a list of missing values
+y2mis = 2*(Y1 - 1)+z3 < 0 
+
+
+Y2_missing <- Y2[y2mis]
+Y2_observed <- Y2[!(y2mis)]
+```
+The overall mean of Y2 (and its associated standard error) are $\mu = 5.043$ and $\sigma = 2.257$.
+```{r plot q3a, echo = FALSE, fig.align = 'center'}
+plot(density(Y2), lwd = 2, col = "blue", xlab = "SBP", main = "MNAR", ylim = c(0,0.4))
+lines(density(Y2_observed), lwd = 2, col = "red")
+legend(-2.4, 0.3, legend = c("Complete data", "Observed data"), 
+       col = c("blue", "red"), lty = c(1,1), lwd = c(2,2), bty ="n")
+
+mean(Y2);sd(Y2);mean(Y2_observed);sd(Y2_observed)
+```
+We can see that both seem to follow an approx. normal distribution. The observed mean is $\mu = 6.736$ and standard deviation of $\sigma = 1.516095$. The overall mean of Y2 (and its associated standard error) are $\mu = 5.043$ and $\sigma = 2.257$.
+It makes sense that the observed mean is higher than overall mean since we are removing data based on Y1, and the condition makes it so that we remove lower Y1 one values. Y1 is pos correlated to Y2 so we are then removing lower Y2 values leading to this observed higher mean. This also lowers our standard deviation, creating false accuracy.
+
+### 3(b)
+```{r q3b, include=FALSE, fig.align = 'center'}
+
+y2incomplete = Y2
+y2incomplete[y2mis] = NA
+
+
+
+data <- data.frame("Y1" = Y1 , "Y2m" = y2incomplete)
+set.seed(1)
+fit = lm(Y2m ~ Y1, data = data)
+summary(fit)
+plot(fit)
+#side remark: since we had a correlation of 2/sqrt(5) we could have expected that a lot of the variability in Y2 can be explained by Y1
+```
+
+
+
+
+```{r q3b plot, echo = FALSE, fig.align = 'center'}
+set.seed(1)
+
+predicted_sri <- predict(fit, newdata = data) + rnorm(nrow(data), 0, sigma(fit))
+Y2_sri = ifelse(is.na(data$Y2m), predicted_sri, data$Y2m)
+
+plot(data$Y1, data$Y2m, xlab = "Y1", ylab = "Y2m", main = "scatterplot observed and imputed", ylim = c(0,14))
+points(Y1[y2mis], predicted_sri[y2mis] , col = "firebrick1")
+legend(-2, 12, legend = c("observed data","imputed data"), 
+       col = c("black", "firebrick1"), lty = c(1,1), lwd = c(2,2), bty ="n")
+#test validity of the tests
+
+
+
+
+#completed DEP variable
+mean(Y2)
+mean(Y2_sri)
+
+#std deviation for the complete and completed data
+sd(Y2)
+sd(Y2_sri)
+
+#correlation for the observed and completed data
+cor(Y2, Y1, use = "complete")
+cor(Y2_sri, Y1)
+
+
+plot(density(Y2), lwd = 2, col = "blue", xlab = "SBP", main = "MAR", ylim = c(0,0.28))
+lines(density(Y2_sri), lwd = 2, col = "red")
+legend(8, 0.4, legend = c("complete data","sri data"), 
+       col = c("red", "blue"), lty = c(1,1), lwd = c(2,2), bty ="n")
+
+```
+
+We have an almost identical mean and  standard deviation for our imputed data with regards to our completed  data from Y2. Our imputed data has $\mu = 4.986$ and $\sigma = 2.356$ and our complete data has $\mu = 5.043$ and $\sigma = 2.256$. Such a result is to be expected as for MAR data, stochastic regression in general manages to provide accurate estimates of the mean, variance and correlation. This can be seen in the very similar density plots. Because the correltion between Y1 and Y2 is high we manage to accurately induce the values of Y2. However this then leads to higher correlation in our data and reduced variation as can be seen in the red points in the scatterplot. This increased correlation and decreased variation is a common pitfall of stochastic regression imputation, though it is better than in a simple regression imputation. 
+
+
+### 3(c)
+Now we can see that missingness is dependent on Y2 (missing values themselves) and Z3, making this mechanism MNAR
+
+```{r q3c, include = FALSE}
+
+n = 500
+mu1 = 1
+mu2 = 5
+
+sigma1 = 1
+#var2 = var(5 + 2 * Z1 + Z2) = 4var(z1) + var(z2) + 2cov(z1,z2)
+sigma2 = sqrt(5)
+
+#remark the following covariance properties: 
+# Cov(aX + b, cY + d) = acCov(X, Y ) 
+# Cov(X1 + X2, Y ) = Cov(X1, Y ) + Cov(X2, Y )
+# Cov(X, X) = Var(X)
+# then cov(y1, y2) = cov(1 + z1, 5 + 2z1, z2) = cov(z1,2z1) + cov(z1,z2)
+# = cov(z1, 2z1) = 2 *var(z1) = 2
+
+rho = 2/sqrt(5)
+
+#covariance matrix
+Sigma <- matrix(c(sigma1^2, rho*sigma1*sigma2, rho*sigma1*sigma2, sigma2^2), 2, 2, byrow = T)
+set.seed(1)
+Y <- mvrnorm(n, mu = c(mu1, mu2), Sigma = Sigma)
+Y1 <- Y[,1]; Y2 <- Y[,2]
+mean(Y1); mean(Y2); sd(Y1); sd(Y2)
+set.seed(1)
+z3 = rnorm(n, 0, 1)
+
+# y2missing hold TRUE value when the function is less than 0. We can use it to creat a list of missing values
+y2mis = 2*(Y2 - 5)+z3 < 0 
+
+
+Y2_missing <- Y2[y2mis]
+Y2_observed <- Y2[!(y2mis)]
+```
+
+```{r q3c plot, echo = FALSE, fig.align = 'center'}
+
+plot(density(Y2), lwd = 2, col = "blue", xlab = "Y2", ylab = "density",main = "MNAR", ylim = c(0,0.5))
+lines(density(Y2_observed), lwd = 2, col = "red")
+legend(8, 0.4, legend = c("complete data", "observed data"), 
+       col = c("blue","red"), lty = c(1, 1), bty ="n")
+```
+
+In this cae we can see two very distinct distributions. In general it makes sense that missing data and observed data would not have similar distribution under the MNAR assumption, since missingness depends on the missing values themselves. In our case the missingness was determined by $2(Y_2 - 5) + Z_3 <  0$ where $Y_2 = 5 + 2*Z_1 + Z_2$ Notice that $Z_1$ and $Z_2$ are standard normal random variable and so our full data set was centered around $\mu = 5$. Now based on the condition, it was far more likely to remove $Z_2$ values st $Z_2 < 5$,i.e. observe values where $Z_2 > 5$ which is exactly what we can see in our density plot.
+
+### 3(d)
+```{r q3d, include=FALSE, fig.align = 'center'}
+
+y2incomplete = Y2
+y2incomplete[y2mis] = NA
+
+
+
+data <- data.frame("Y1" = Y1 , "Y2m" = y2incomplete)
+fit = lm(y2incomplete ~ Y1, data = data)
+summary(fit)
+plot(fit)
+
+set.seed(1)
+predicted_sri <- predict(fit, newdata = data) + rnorm(nrow(data), 0, sigma(fit))
+Y2_sri = ifelse(is.na(data$Y2m), predicted_sri, data$Y2m)
+
+plot(data$Y1, data$Y2m, xlab = "Y1", ylab = "Y2m", ylim = c(0,12))
+points(Y1[y2mis], predicted_sri[y2mis] , col = "firebrick1")
+
+
+#completed DEP variable
+mean(Y2)
+mean(Y2_sri)
+
+#std deviation for the observed and completed data
+sd(Y2)
+sd(Y2_sri)
+
+#correlation for the observed and completed data
+cor(Y2, Y1)
+cor(Y2_sri, data$Y1)
+
+
+plot(density(Y2), lwd = 2, col = "blue", xlab = "Y2", main = "MNAR" , ylim = c(0,0.5))
+lines(density(Y2_sri), lwd = 2, col = "red")
+legend(10, 0.4, legend = c("complete data", "Sri data"), 
+       col = c("blue","red"), lty = c(1, 1), bty ="n")
+
+
+```
+
+```{r q3d plot, echo = FALSE, fig.align = 'center'}
+plot(density(Y2), lwd = 2, col = "blue", xlab = "Y2", main = "MNAR" , ylim = c(0,0.5))
+lines(density(Y2_sri), lwd = 2, col = "red")
+legend(10, 0.4, legend = c("complete data", "Sri data"), 
+       col = c("blue","red"), lty = c(1, 1), bty ="n")
+```
+
+we have a more centered density with similar variance. In the previous plot we could see that observed data was slightly skewed to the right, which makes sense since we removed majority of smaller Y2 values. Adding back Y2 values corresponding to the lower Y1 values removes this skewness. The missing representation in Y2 values between (0,5) stems from our linear model we used to impute the missing Y2 values. $Y_2 = \beta_0 + Y_1*\beta_1$ where $\beta_1 = 1.39$ and $\beta_0 = 4.4$. The apparent problem here is that we removed a majority of smaller $Y_2$ values, so that we had mostly larger observed values. We then used these available larger $Y_2$ values and their corresponding $Y_1$ values to predict the missing data. Thus the model with intercept $\beta_0 = 4.40$ and $\beta_1 = 1.39$ generated more $Y_2 > 5$ values than present in the real data. This shows well that if data is MNAR then using our observed data to try and predict the missing values can fail completely because our knowledge may be completely biased.  
+In this case we underrepresent the lower Y2 values and our estimate would be biased towards larger Y2 values. Our imputed data has $\mu = 5.51$ and $\sigma = 1.97$ and our complete data has $\mu = 5.04$ and $\sigma = 2.256$. Such a result is to be expected as for MNAR data, since they are hard to handle, and and single imputation method, even stochastic regression imputation, will deliver biased results. Still the above highlights an interesting mechanism which helps explain why this is the case. 
+
+## Question 4
+
+### 4(a) 
+```{r 4a, echo=FALSE}
+load("databp.Rdata")
+
+data = databp
+rt_cca <- which(is.na(data$recovtime) == FALSE)
+#mean of recovery time and standard deviation
+mean(data$recovtime , na.rm = TRUE)
+sd(data$recovtime , na.rm = TRUE)/sqrt(length(rt_cca))
+
+#cor between recovery time and blood pressure
+cor(data$recovtime, data$bloodp, use = "complete.obs", method = "pearson")
+
+#cor between recovery time and dose
+cor(data$recovtime, data$logdose, use = "complete.obs", method = "pearson")
+
+
+
+```
+
+The mean $\mu$ and standard deviation $\sigma$ of recovery time under CCA are respectively: 19.27 and 2.60. The correlation between recovery time and dose under CCA is 0.24 and between recovery time and blood pressure under complete case analysis is: -0.02
+
+### 4(b)
+
+```{r 4b, echo=FALSE}
+#mean imputation
+mimp_mu = mean(data$recovtime , na.rm = TRUE)
+mimp_data = ifelse(is.na(data$recovtime), mimp_mu, data$recovtime)
+mean(mimp_data)              
+sd(mimp_data)/sqrt(length(mimp_data))
+
+#cor between recovery time and blood pressure
+cor(mimp_data, data$bloodp, use = "complete.obs", method = "pearson")
+
+#cor between recovery time and dose
+cor(mimp_data, data$logdose, use = "complete.obs", method = "pearson")
+
+```
+
+The mean $\mu$ and standard deviation $\sigma$ of recovery time under mean imputation are respectively: 19.27 and 2.28. The correlation between recovery time and dose under mean imputation is 0.22 and between recovery time and blood pressure under complete case analysis is: -0.02. interesting is that the $\mu$ is the same as in the complete case analysis but the $\sigma$ is noticeably lower.
+
+### 4(c)
+```{r, echo=FALSE}
+rimp_fit = lm(data$recovtime ~ data$logdose + data$bloodp , data = data)
+predicted_rimp = predict(rimp_fit, newdata = data)
+rt_rimp =  ifelse(is.na(data$recovtime), predicted_rimp, data$recovtime)
+mean(rt_rimp)              
+sd(rt_rimp)/sqrt(length(rt_rimp))
+
+#cor between recovery time and blood pressure
+cor(rt_rimp, data$logdose, use = "complete.obs", method = "pearson")
+
+#cor between recovery time and dose
+cor(rt_rimp, data$bloodp, use = "complete.obs", method = "pearson")
+```
+
+
+```{r 4c regression,include=FALSE}
+#regression imputation
+rimp_fit = lm(data$recovtime ~ data$logdose + data$bloodp , data = data)
+summary(rimp_fit)
+plot(rimp_fit)
+predicted_rimp = predict(rimp_fit, newdata = data)
+rt_rimp =  ifelse(is.na(data$recovtime), predicted_rimp, data$recovtime)
+mean(rt_rimp)              
+sd(rt_rimp)/sqrt(length(rt_rimp))
+
+#cor between recovery time and blood pressure
+cor(rt_rimp, data$logdose, use = "complete.obs", method = "pearson")
+
+#cor between recovery time and dose
+cor(rt_rimp, data$bloodp, use = "complete.obs", method = "pearson")
+
+```
+
+
+
+The mean $\mu$ and standard deviation $\sigma$ of recovery time under regression imputation are respectively: 19.44 and 2.31. The correlation between recovery time and dose under regression imputation is 0.28 and between recovery time and blood pressure under complete case analysis is: -0.01. Correlation between RT and Dose is higher since in our model the coefficient for dose is quite high so using the model to impute missing values would result in higher correlation between the two variables. 
+
+### 4(d)
+```{r 4d, echo=FALSE}
+#stochastic regression imputation
+set.seed(1)
+srimp_fit = lm(data$recovtime ~ data$logdose + data$bloodp , data = data)
+summary(srimp_fit)
+predicted_sri <- predict(srimp_fit, newdata = data) + rnorm(nrow(data), 0, sigma(srimp_fit))
+rt_srimp =  ifelse(is.na(data$recovtime), predicted_sri, data$recovtime)
+mean(rt_srimp)              
+sd(rt_srimp)/sqrt(length(rt_srimp))
+
+#correlation recovery time and blood pressure
+cor(rt_srimp, data$logdose, use = "complete.obs", method = "pearson")
+
+#correlation recovery time and dose
+cor(rt_srimp, data$bloodp, use = "complete.obs", method = "pearson")
+```
+
+With seed set to 1: The mean $\mu$ and standard deviation $\sigma$ of recovery time under CCA are respectively: 20.46 and 2.45. The correlation between recovery time and dose under CCA is 0.228 and between recovery time and blood pressure under complete case analysis is: -0.017
+
+**Question:** Do you need any extra care when conducting stochastic regression imputation in this example?
+
+Looking at our fit summary below, we can see that the model does not produce coefficients that are significant and so we cannot expect our imputed data to be accurate representations of the missing values. In general the imputed values from regression imputation and stochastic regression imputation are only as good as the model used to impute them. 
+
+Further doing anova analysis we can see that we cannot reject the null hypothesis: intercept only model (i.e. mean imputation) and looking at the normal Q-Q plot we can see that normaility condition might be violated, though here I would consider the small size of our data set. 
+
+
+```{r 4dplot, echo=FALSE}
+#data do not have an apparent fit
+plot(data)
+
+plot
+
+#out m_full and m_reduced1 model coefficients are all insignificant
+m_full = lm(data$recovtime ~ data$logdose + data$bloodp , data = data)
+summary(m_full)
+
+m_reduced1 = lm(data$recovtime ~ data$logdose, data = data)
+summary(m_reduced1)
+
+#mean imputation:
+m_reduced2 = lm(data$recovtime ~ 1, data = data)
+summary(m_reduced2)
+
+anova(m_reduced2 , m_reduced1)
+#with p = 0.2838 we fail to reject the null and indeed this suggests that mean imputation is better suited than regression imputation. 
+
+plot(m_full)
+#further it seems that the constant variance assumption is violated. 
+#plot(m_full$fitted.values,residuals(m_full), xlab = "Fitted values", ylab = "Residuals")
+
+#plot(predicted_sri[!(is.na(data$recovtime))],(residuals(m_full)), xlab = "Fitted values", ylab = "Residuals")
+
+#And if we look at  predicted_sri we can see we have negative recovery time..
+predicted_sri
+
+
+```
+If we look at  predicted_sri we can see we have negative recovery time of -6.979 at position 14 of the data set. A negative recovery time is impossible, so it is problematic to have a model making such predictions. It would be best to define how to treat cases when an imputed value would be negative. One option could be to set the value to zero or other, more suitable values like the mean. Alternatively we could also all together use a different method, like predictive mean matching which we will discuss in question **4e**. 
+
+### 4(e)
+
+```{r 4e, include=FALSE}
+#hot deck - regression imputation
+
+rimp_fit = lm(data$recovtime ~ data$logdose + data$bloodp , data = data)
+
+predicted_rimp = predict(rimp_fit, newdata = data)
+rt_rimp =  ifelse(is.na(data$recovtime), predicted_rimp, data$recovtime)
+
+
+rt_hdimp = data$recovtime
+
+missing_pred = predicted_rimp[is.na(data$recovtime)]
+observed_pred = predicted_rimp[!(is.na(data$recovtime))]
+#for loop finds the sq_dif. then finds the donor by using the index of the lowest sq_dif in our recovtime data. and finally assigns the donor to our data by using the index that corresponds to the prediction for the missing value
+for (i in missing_pred){
+  sq_dif = (i - observed_pred)**2
+  donor = data$recovtime[predicted_rimp == observed_pred[sq_dif ==  min(sq_dif)]]
+  rt_hdimp[predicted_rimp == i] = donor
+}
+sq_dif = (missing_pred[3]- observed_pred)**2
+sq_dif
+rt_hdimp
+data["test"] = rt_hdimp
+
+
+# Get mean and standard error for recovery time using predictive mean matching
+mean(rt_hdimp)
+sd(rt_hdimp)/sqrt(length(rt_hdimp))
+
+# Get correlations using predictive mean matching
+cor(rt_hdimp, databp$logdose)
+cor(rt_hdimp, databp$bloodp)
+```
+
+```{r 4e output, echo=FALSE}
+# Get mean and standard error for recovery time using predictive mean matching
+mean(rt_hdimp)
+sd(rt_hdimp)/sqrt(length(rt_hdimp))
+
+# Get correlations using predictive mean matching
+cor(rt_hdimp, databp$logdose)
+cor(rt_hdimp, databp$bloodp)
+```
+
+The mean $\mu$ and standard deviation $\sigma$ of recovery time after predictive mean matching are respectively 19.44 and 2.46. The correlation of recovery time and dose after predictive mean matching is 0.3 and of recovery time and blood pressure -0.03. Note that in this case we have the highest correlation between recovery time and dose. Again this is because our predictions are mostly impacted by dose so we will choose donors with very similar doses for our missing values, leading to this high correlation. 
+
+### 4(f)
+Our problem of predicting negative recovery times is gone. Moreover we get predicted recovery time as integers and not as float types which matches the observed data format of recovery time as a factor. Thus by using actually observed values we ensure that we will not impute any nonsensical data and that the imputed values will match the observed values in temrs of range and type. 
+Estimated standard deviation tend to be much too low, leading to inflated test statistics and confidence intervals that are much too narrow, though in this case the estimated standard deviation $\sigma$ is not the lowest observed in all the test. 
+Another problem is that we are only looking at the donor with the smallest difference in prediction even though there might be other donors with almost equally small differences that we now ignore. This may lead to biased results and also leads to an increased correlation. One solution to this problem would be to consider the top n closest values and either randomly pick one or take the value closest to the mean of these values or some other method. This would reduce correlation and add variation, leading to more realistic imputation. 
+
+
+
+
+
+
+
